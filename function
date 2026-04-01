@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roblox Football League</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #eee;
+    }
+    header {
+      background-color: #1f1f1f;
+      padding: 20px;
+      text-align: center;
+      font-size: 2em;
+      font-weight: bold;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 10px;
+    }
+    .matches, .table {
+      margin-bottom: 40px;
+    }
+    h2 {
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    .match-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #1f1f1f;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+    .match-card img {
+      height: 40px;
+      width: 40px;
+    }
+    .status {
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background-color: #444;
+    }
+    .status.LIVE { background-color: #e74c3c; }
+    .status.FT { background-color: #2ecc71; }
+    .status.HT { background-color: #f1c40f; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #1f1f1f;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #444;
+      text-align: center;
+    }
+    th {
+      background-color: #2c2c2c;
+    }
+  </style>
+</head>
+<body>
+  <header>Roblox Football League</header>
+  <div class="container">
+    
+    <div class="matches">
+      <h2>Matches</h2>
+      <div id="matches-container">Loading matches...</div>
+    </div>
+
+    <div class="table">
+      <h2>League Table</h2>
+      <table id="table-container">
+        <thead>
+          <tr>
+            <th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    // Replace with your Google Sheet API URL
+    const SHEET_API_URL = 'https://sheets.googleapis.com/v4/spreadsheets/YOUR_SHEET_ID/values/Matches?key=YOUR_API_KEY';
+    const TEAMS_API_URL = 'https://sheets.googleapis.com/v4/spreadsheets/YOUR_SHEET_ID/values/Teams?key=YOUR_API_KEY';
+
+    let teams = [];
+
+    async function fetchTeams() {
+      const res = await fetch(TEAMS_API_URL);
+      const data = await res.json();
+      // Skip header row
+      teams = data.values.slice(1).map(t => ({ id: t[0], name: t[1], logo: t[2] }));
+    }
+
+    async function fetchMatches() {
+      const res = await fetch(SHEET_API_URL);
+      const data = await res.json();
+      const matches = data.values.slice(1); // skip header
+      renderMatches(matches);
+      renderTable(matches);
+    }
+
+    function renderMatches(matches) {
+      const container = document.getElementById('matches-container');
+      container.innerHTML = '';
+      matches.forEach(m => {
+        const home = teams.find(t => t.name === m[1]);
+        const away = teams.find(t => t.name === m[2]);
+        const card = document.createElement('div');
+        card.className = 'match-card';
+        card.innerHTML = `
+          <div><img src="${home.logo}" alt="${home.name}"> ${home.name}</div>
+          <div>${m[3]} - ${m[4]}</div>
+          <div><img src="${away.logo}" alt="${away.name}"> ${away.name}</div>
+          <div class="status ${m[5]}">${m[5]}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderTable(matches) {
+      const tbody = document.querySelector('#table-container tbody');
+      tbody.innerHTML = '';
+      const stats = {};
+      teams.forEach(t => stats[t.name] = { P:0,W:0,D:0,L:0,GF:0,GA:0,GD:0,Pts:0 });
+      matches.forEach(m => {
+        const home = m[1], away = m[2];
+        const homeScore = parseInt(m[3]);
+        const awayScore = parseInt(m[4]);
+        stats[home].P++; stats[away].P++;
+        stats[home].GF += homeScore; stats[home].GA += awayScore;
+        stats[away].GF += awayScore; stats[away].GA += homeScore;
+        stats[home].GD = stats[home].GF - stats[home].GA;
+        stats[away].GD = stats[away].GF - stats[away].GA;
+        if(homeScore > awayScore){ stats[home].W++; stats[home].Pts+=3; stats[away].L++; }
+        else if(homeScore < awayScore){ stats[away].W++; stats[away].Pts+=3; stats[home].L++; }
+        else{ stats[home].D++; stats[away].D++; stats[home].Pts++; stats[away].Pts++; }
+      });
+      Object.keys(stats).sort((a,b)=>stats[b].Pts - stats[a].Pts).forEach(team => {
+        const s = stats[team];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${team}</td><td>${s.P}</td><td>${s.W}</td><td>${s.D}</td><td>${s.L}</td><td>${s.GF}</td><td>${s.GA}</td><td>${s.GD}</td><td>${s.Pts}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function init() {
+      await fetchTeams();
+      await fetchMatches();
+      // Refresh every 15 seconds
+      setInterval(fetchMatches, 15000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
